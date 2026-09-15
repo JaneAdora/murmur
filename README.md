@@ -154,6 +154,47 @@ finish the current take cleanly rather than dropping it.
   clean, with correct punctuation, capitalisation and apostrophes. That is a
   good sign, not a word error rate.
 
+## When the hotkey does nothing
+
+Check the journal before anything else. The failure that looks like a dead
+hotkey is usually a live hotkey and a dead decode:
+
+```
+murmur: recording
+murmur: transcribe failed: decode failed: CUDA error: unknown error
+```
+
+`recording` means Super+D, the shortcut, the socket and the microphone are all
+fine. Only the GPU side is broken.
+
+`CUDA error: unknown error` on a daemon that loaded its model happily is a
+poisoned CUDA context: memory copies still work, which is why the weights
+loaded, but kernel launches do not. It was seen once, on 2026-09-15, when a
+logout and login restarted the daemon four seconds into a compositor
+bring-up, while cosmic-comp was still taking DRM master. Starting a CUDA
+context in that window appears to produce one that never works.
+
+To tell a poisoned daemon from a genuinely broken GPU, decode in a fresh
+process:
+
+```sh
+.venv/bin/python scripts/smoke_asr.py
+```
+
+If that works and the daemon does not, the daemon's context is the problem
+and `systemctl --user restart murmur` fixes it.
+
+Two numbers worth knowing. A healthy daemon holds about 3.0 GiB of VRAM, so
+substantially more than that means failed decodes have been stranding
+allocations. And a warm take is tens of milliseconds, so anything near a
+second is the lazy CUDA kernel init that the startup warmup is supposed to
+have paid already.
+
+Since the fixes in this repo's history, a daemon whose warmup cannot decode
+exits non-zero rather than reporting itself ready, and systemd retries it
+three times across five minutes. So this should now recover on its own, and
+say so in the journal if it cannot.
+
 ## Tests
 
 ```sh
