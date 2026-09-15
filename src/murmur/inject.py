@@ -60,13 +60,25 @@ BACKENDS = {
 }
 
 
-def inject(text: str, backend: str = "wtype") -> None:
-    """Insert `text` at the cursor. No-op for empty or whitespace-only text."""
+def inject(text: str, backend: str = "wtype", trailing_space: bool = True) -> None:
+    """Insert `text` at the cursor. No-op for empty or whitespace-only text.
+
+    One space is appended by default. Dictation comes in bursts, and a take is
+    nearly always followed by another, so without it consecutive takes arrive
+    welded together ("let it go.And then") and a space has to be typed by hand
+    between every pair.
+
+    The blank-text guard runs first, so a take that decodes to nothing still
+    injects nothing rather than a stray space. Text that already ends in
+    whitespace is left alone.
+    """
     if not text.strip():
         return
     fn = BACKENDS.get(backend)
     if fn is None:
         raise InjectionError(f"unknown inject backend {backend!r}")
+    if trailing_space and not text[-1].isspace():
+        text += " "
     fn(text)
 
 

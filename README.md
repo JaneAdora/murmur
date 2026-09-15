@@ -74,6 +74,7 @@ no_speech_timeout = 10.0 # give up if you toggle on and never speak
 max_seconds = 300        # hard cap
 inject = "wtype"         # "wtype" | "clipboard" | "none"
 strip_fillers = true     # drop standalone "um"/"uh" before injecting
+trailing_space = true    # append one space so back-to-back takes stay apart
 transcript_log = true    # append every take to ~/.local/share/murmur/takes.jsonl
 log_text = true          # include take text in the journal
 ```

@@ -314,3 +314,56 @@ def test_clean_shutdown_exits_zero(monkeypatch):
     d._controller()
     assert not d._start_failed.is_set()
     assert d.exit_code == 0
+
+
+# -- trailing space ---------------------------------------------------------
+
+
+def _capture_wtype(monkeypatch):
+    sent = []
+    monkeypatch.setitem(
+        __import__("murmur.inject", fromlist=["BACKENDS"]).BACKENDS,
+        "wtype",
+        lambda t: sent.append(t),
+    )
+    return sent
+
+
+def test_inject_appends_one_trailing_space(monkeypatch):
+    """Consecutive takes ran together: "let it go.And then". A take is almost
+    always followed by more words, so the separator belongs here rather than on
+    the spacebar."""
+    sent = _capture_wtype(monkeypatch)
+    inject("let it go.", "wtype")
+    assert sent == ["let it go. "]
+
+
+def test_inject_trailing_space_can_be_disabled(monkeypatch):
+    sent = _capture_wtype(monkeypatch)
+    inject("let it go.", "wtype", trailing_space=False)
+    assert sent == ["let it go."]
+
+
+def test_inject_does_not_double_an_existing_trailing_space(monkeypatch):
+    sent = _capture_wtype(monkeypatch)
+    inject("already spaced ", "wtype")
+    assert sent == ["already spaced "]
+
+
+def test_blank_text_never_becomes_a_lone_space(monkeypatch):
+    """A take that decodes to nothing must stay nothing. Injecting a bare space
+    would put drift into the document for every failed or silent take."""
+    sent = _capture_wtype(monkeypatch)
+    inject("", "wtype")
+    inject("   \n ", "wtype")
+    assert sent == []
+
+
+def test_trailing_space_is_on_by_default(tmp_path):
+    assert Config.load(tmp_path / "nope.toml").trailing_space is True
+
+
+def test_trailing_space_can_be_turned_off_in_config(tmp_path):
+    p = tmp_path / "config.toml"
+    p.write_text("trailing_space = false\n")
+    assert Config.load(p).trailing_space is False

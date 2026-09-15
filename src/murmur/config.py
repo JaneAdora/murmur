@@ -8,6 +8,7 @@
     max_seconds = 300        # hard cap so a forgotten session can't run forever
     inject = "wtype"         # "wtype" | "clipboard" | "none"
     strip_fillers = true     # drop standalone "um"/"uh" before injecting
+    trailing_space = true    # append one space so back-to-back takes stay apart
     transcript_log = true    # append every take to ~/.local/share/murmur/takes.jsonl
     log_text = true          # include take text in the journal
 
@@ -47,6 +48,7 @@ class Config:
     max_seconds: int = 300
     inject: str = "wtype"
     strip_fillers: bool = True
+    trailing_space: bool = True
     transcript_log: bool = True
     log_text: bool = True
 
