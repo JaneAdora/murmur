@@ -78,6 +78,11 @@ class ParakeetEngine:
             with torch.inference_mode():
                 out = self._model.transcribe([path], batch_size=1, verbose=False)
         except Exception as exc:
+            # A decode that dies partway leaves its activations in the caching
+            # allocator. If the context is sick every later take fails the same
+            # way, and the daemon grows without bound, so hand the blocks back
+            # before reporting the failure.
+            self._empty_cache()
             raise ASRError(f"decode failed: {exc}") from exc
         finally:
             try:
@@ -111,11 +116,17 @@ class ParakeetEngine:
         self.transcribe(np.zeros(8000, dtype=np.float32), 16_000)
         return time.perf_counter() - t0
 
-    def release(self) -> None:
-        self._model = None
+    def _empty_cache(self) -> None:
+        """Hand cached blocks back to the driver. Best-effort by necessity: when
+        the context is already broken this call fails too, and every caller is
+        in the middle of reporting a more useful error."""
         try:
             import torch
 
             torch.cuda.empty_cache()
         except Exception:
             pass
+
+    def release(self) -> None:
+        self._model = None
+        self._empty_cache()

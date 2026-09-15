@@ -249,3 +249,28 @@ def test_warmup_returns_elapsed_on_success(tmp_path):
             return ["quiet"]
 
     assert _engine(tmp_path, _Ok()).warm() >= 0.0
+
+
+def test_failed_decode_releases_vram(tmp_path, monkeypatch):
+    """A decode that raises must not strand its allocations on the GPU."""
+    eng = _engine(tmp_path, _RaisingModel(RuntimeError("CUDA error: unknown error")))
+    freed = []
+    monkeypatch.setattr(eng, "_empty_cache", lambda: freed.append(True))
+    with pytest.raises(ASRError):
+        eng.transcribe(np.zeros(8000, dtype=np.float32), 16_000)
+    assert freed == [True], "failed decode did not release cached VRAM"
+
+
+def test_successful_decode_does_not_empty_cache(tmp_path, monkeypatch):
+    """empty_cache() on the happy path would throw away the allocator's blocks
+    and make the next take slower for no reason."""
+
+    class _Ok:
+        def transcribe(self, *a, **kw):
+            return ["hello"]
+
+    eng = _engine(tmp_path, _Ok())
+    freed = []
+    monkeypatch.setattr(eng, "_empty_cache", lambda: freed.append(True))
+    assert eng.transcribe(np.zeros(8000, dtype=np.float32), 16_000) == "hello"
+    assert freed == []
