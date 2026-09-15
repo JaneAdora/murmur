@@ -5,16 +5,24 @@ Documentation=https://github.com/jane/murmur
 # inject text into, and an audio device to record from.
 PartOf=graphical-session.target
 After=graphical-session.target
+# These two are [Unit] directives. They sat in [Service], where systemd parsed
+# StartLimitBurst for backwards compatibility but rejected StartLimitIntervalSec
+# outright, logging "Unknown key name 'StartLimitIntervalSec' in section
+# 'Service', ignoring" on every daemon-reload. The rate limit the comment below
+# describes was therefore never in effect. It matters more now that a failed
+# warmup is a fatal start: three attempts inside five minutes, then stop, so a
+# genuinely broken GPU cannot spin here forever.
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
 Type=simple
 ExecStart=%h/projects/murmur/.venv/bin/python -m murmur daemon
 # Restart on crash, but not on a clean exit, and back off hard enough that a
-# model-load failure cannot become a respawn loop.
+# model-load failure cannot become a respawn loop. The rate limit itself lives
+# in [Unit]; see the note there.
 Restart=on-failure
 RestartSec=15
-StartLimitIntervalSec=300
-StartLimitBurst=3
 # Model load is ~55s on a cold HuggingFace cache.
 TimeoutStartSec=180
 KillSignal=SIGTERM
