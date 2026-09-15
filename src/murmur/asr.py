@@ -96,14 +96,19 @@ class ParakeetEngine:
     def warm(self) -> float:
         """Decode a fraction of a second of silence to force lazy CUDA kernel
         init. Without this the first real take after every daemon start pays
-        ~800 ms instead of the ~45 ms every later take costs. Returns seconds."""
+        ~800 ms instead of the ~45 ms every later take costs. Returns seconds.
+
+        Raises ASRError if that decode fails. This used to be swallowed as
+        best-effort, which meant a daemon whose CUDA context was poisoned at
+        startup still logged "ready" and sat there looking healthy until the
+        first real take came back empty. A warmup that cannot decode silence
+        will not decode speech either, so it is worth failing loudly: the
+        controller treats it as a fatal start and systemd restarts the unit.
+        """
         import numpy as np
 
         t0 = time.perf_counter()
-        try:
-            self.transcribe(np.zeros(8000, dtype=np.float32), 16_000)
-        except ASRError:
-            pass  # warmup is best-effort; a failure here is not fatal
+        self.transcribe(np.zeros(8000, dtype=np.float32), 16_000)
         return time.perf_counter() - t0
 
     def release(self) -> None:

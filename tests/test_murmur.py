@@ -11,6 +11,7 @@ import threading
 import numpy as np
 import pytest
 
+from murmur.asr import ASRError, ParakeetEngine
 from murmur.capture import TRIM_FRACTION, trim_trailing_silence
 from murmur.config import Config
 from murmur.inject import InjectionError, available, inject
@@ -213,3 +214,38 @@ def test_record_never_raises_on_bad_path(tmp_path):
     bad = tmp_path / "nope"
     bad.write_text("i am a file, not a directory")
     record("x", "x", 1.0, 10, "user", path=bad / "takes.jsonl")  # must not raise
+
+
+# -- asr engine -------------------------------------------------------------
+
+
+class _RaisingModel:
+    """Stands in for the NeMo model when the GPU context is unusable."""
+
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    def transcribe(self, *a, **kw):
+        raise self.exc
+
+
+def _engine(tmp_path, model):
+    eng = ParakeetEngine("nvidia/parakeet-tdt-0.6b-v3", "cuda", scratch=tmp_path)
+    eng._model = model
+    return eng
+
+
+def test_warmup_failure_propagates(tmp_path):
+    """A warmup that cannot decode means the GPU context is dead. Swallowing it
+    lets the daemon announce itself ready with a model it cannot run."""
+    eng = _engine(tmp_path, _RaisingModel(RuntimeError("CUDA error: unknown error")))
+    with pytest.raises(ASRError, match="unknown error"):
+        eng.warm()
+
+
+def test_warmup_returns_elapsed_on_success(tmp_path):
+    class _Ok:
+        def transcribe(self, *a, **kw):
+            return ["quiet"]
+
+    assert _engine(tmp_path, _Ok()).warm() >= 0.0
