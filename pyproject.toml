@@ -1,0 +1,22 @@
+[project]
+name = "murmur"
+version = "0.1.0"
+description = "Local, low-latency dictation for COSMIC on Wayland"
+requires-python = ">=3.11"
+dependencies = [
+    "nemo_toolkit[asr]",
+    "silero-vad",
+    "sounddevice",
+    "soundfile",
+    "numpy",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,26 @@
+[Unit]
+Description=murmur local dictation daemon
+Documentation=https://github.com/jane/murmur
+# Only meaningful inside a graphical session: it needs a Wayland socket to
+# inject text into, and an audio device to record from.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/projects/murmur/.venv/bin/python -m murmur daemon
+# Restart on crash, but not on a clean exit, and back off hard enough that a
+# model-load failure cannot become a respawn loop.
+Restart=on-failure
+RestartSec=15
+StartLimitIntervalSec=300
+StartLimitBurst=3
+# Model load is ~55s on a cold HuggingFace cache.
+TimeoutStartSec=180
+KillSignal=SIGTERM
+TimeoutStopSec=20
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=%h/projects/murmur/src
+
+[Install]
+WantedBy=graphical-session.target
