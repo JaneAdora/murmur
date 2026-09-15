@@ -67,10 +67,20 @@ class Daemon:
         # but do not inject. Only ever touched by the controller thread.
         self._dry = False
         self._shutdown = threading.Event()
+        # Distinguishes "gave up during startup" from "asked to stop". systemd
+        # only retries a non-zero exit, so the two must not look alike.
+        self._start_failed = threading.Event()
         self._status = Status(model=cfg.model)
         self._status_lock = threading.Lock()
 
     # -- status ------------------------------------------------------------
+
+    @property
+    def exit_code(self) -> int:
+        """Non-zero when the daemon gave up at startup, so that Restart=on-failure
+        retries it. A clean stop, whether SIGTERM or the quit command, is 0 and
+        stays 0, because systemd should not fight a deliberate shutdown."""
+        return 1 if self._start_failed.is_set() else 0
 
     def status(self) -> Status:
         with self._status_lock:
@@ -97,6 +107,7 @@ class Daemon:
         except Exception as exc:
             self._set(state="idle", last_error=f"model load failed: {exc}")
             log(f"FATAL: model load failed: {exc}")
+            self._start_failed.set()
             self._shutdown.set()
             return
 
@@ -253,7 +264,7 @@ class Daemon:
             self._commands.put("quit")
             controller.join(timeout=10)
             self.socket_path.unlink(missing_ok=True)
-        return 0
+        return self.exit_code
 
 
 def send(command: str, socket_path: Path = SOCKET_PATH, timeout: float = 5.0) -> dict:

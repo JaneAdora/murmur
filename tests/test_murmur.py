@@ -274,3 +274,43 @@ def test_successful_decode_does_not_empty_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(eng, "_empty_cache", lambda: freed.append(True))
     assert eng.transcribe(np.zeros(8000, dtype=np.float32), 16_000) == "hello"
     assert freed == []
+
+
+# -- daemon start failure ---------------------------------------------------
+
+
+def _dead_gpu_daemon(monkeypatch):
+    from murmur.daemon import Daemon
+
+    d = Daemon(Config(), socket_path=None)
+
+    def boom():
+        raise ASRError("decode failed: CUDA error: unknown error")
+
+    monkeypatch.setattr(d.engine, "load", lambda: 0.0)
+    monkeypatch.setattr(d.engine, "warm", boom)
+    monkeypatch.setattr(d.recorder, "load_vad", lambda: None)
+    return d
+
+
+def test_fatal_start_exits_nonzero(monkeypatch):
+    """Restart=on-failure only fires on a non-zero exit. A daemon that gives up
+    at startup and exits 0 looks to systemd like a clean shutdown, so it is
+    never retried and dictation stays dead until someone notices."""
+    d = _dead_gpu_daemon(monkeypatch)
+    d._controller()
+    assert d._start_failed.is_set()
+    assert d.exit_code == 1
+
+
+def test_clean_shutdown_exits_zero(monkeypatch):
+    from murmur.daemon import Daemon
+
+    d = Daemon(Config(), socket_path=None)
+    monkeypatch.setattr(d.engine, "load", lambda: 0.0)
+    monkeypatch.setattr(d.engine, "warm", lambda: 0.0)
+    monkeypatch.setattr(d.recorder, "load_vad", lambda: None)
+    d._shutdown.set()  # exit the controller loop immediately
+    d._controller()
+    assert not d._start_failed.is_set()
+    assert d.exit_code == 0
