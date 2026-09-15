@@ -75,6 +75,7 @@ max_seconds = 300        # hard cap
 inject = "wtype"         # "wtype" | "clipboard" | "none"
 strip_fillers = true     # drop standalone "um"/"uh" before injecting
 trailing_space = true    # append one space so back-to-back takes stay apart
+inject_delay_ms = 2      # ms between keystrokes; 0 drops characters
 transcript_log = true    # append every take to ~/.local/share/murmur/takes.jsonl
 log_text = true          # include take text in the journal
 ```
@@ -145,6 +146,17 @@ finish the current take cleanly rather than dropping it.
   `set_preedit_string` would let text appear live while speaking. That needs a
   real Wayland client rather than a subprocess, so it's the next step rather
   than a blocker.
+
+  This is now the escalation path for a real bug rather than a nicety. Typing
+  text as key events drops characters: on 2026-09-15 "Mostly" arrived as
+  "ostly" and "What" as "hat" while the log showed both decoded correctly.
+  Capitals are three events rather than one, press shift, tap the key, release
+  shift, and that sequence is what went missing. `inject_delay_ms` puts a gap
+  between keystrokes and is the cheap fix, but it is a fix by slowing the race
+  down until it stops showing up, not by removing it. `commit_string` sends the
+  string itself and has no keycodes, modifiers or timing to lose, so if
+  characters keep going missing at a workable delay, build that instead of
+  raising the number again.
 - **No hold-to-talk.** COSMIC's shortcut schema is a single
   `(modifiers, key) -> Action` map with no press/release distinction, so
   toggle plus a VAD backstop is the closest available shape.
@@ -195,6 +207,25 @@ Since the fixes in this repo's history, a daemon whose warmup cannot decode
 exits non-zero rather than reporting itself ready, and systemd retries it
 three times across five minutes. So this should now recover on its own, and
 say so in the journal if it cannot.
+
+## When characters go missing
+
+Different failure from a dead hotkey, and it is not the model. Check the take
+against the log:
+
+```sh
+tail -3 ~/.local/share/murmur/takes.jsonl | jq -r '.cleaned // .raw'
+```
+
+If the log holds the right text and the field does not, the loss happened in
+injection and nothing in the ASR stack is involved. Note that the log cannot
+detect this on its own, since it records what murmur decoded and never what
+landed, so this comparison has to be made by hand.
+
+Raise `inject_delay_ms`. It is 2 ms by default, which costs about 0.6 s of
+typing on a 300-character take. If a delay large enough to stop the drops
+starts to feel slow, that is the signal to build the input-method-v2 backend
+described under Known gaps.
 
 ## Tests
 

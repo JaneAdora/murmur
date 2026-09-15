@@ -9,6 +9,7 @@
     inject = "wtype"         # "wtype" | "clipboard" | "none"
     strip_fillers = true     # drop standalone "um"/"uh" before injecting
     trailing_space = true    # append one space so back-to-back takes stay apart
+    inject_delay_ms = 2      # ms between keystrokes; 0 drops characters
     transcript_log = true    # append every take to ~/.local/share/murmur/takes.jsonl
     log_text = true          # include take text in the journal
 
@@ -49,6 +50,7 @@ class Config:
     inject: str = "wtype"
     strip_fillers: bool = True
     trailing_space: bool = True
+    inject_delay_ms: int = 2
     transcript_log: bool = True
     log_text: bool = True
 

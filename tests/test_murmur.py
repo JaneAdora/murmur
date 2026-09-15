@@ -82,7 +82,7 @@ def test_inject_ignores_blank_text(monkeypatch):
     monkeypatch.setitem(
         __import__("murmur.inject", fromlist=["BACKENDS"]).BACKENDS,
         "wtype",
-        lambda t: called.append(t),
+        lambda t, d=0: called.append(t),
     )
     inject("", "wtype")
     inject("   \n ", "wtype")
@@ -324,7 +324,7 @@ def _capture_wtype(monkeypatch):
     monkeypatch.setitem(
         __import__("murmur.inject", fromlist=["BACKENDS"]).BACKENDS,
         "wtype",
-        lambda t: sent.append(t),
+        lambda t, d=0: sent.append(t),
     )
     return sent
 
@@ -367,3 +367,39 @@ def test_trailing_space_can_be_turned_off_in_config(tmp_path):
     p = tmp_path / "config.toml"
     p.write_text("trailing_space = false\n")
     assert Config.load(p).trailing_space is False
+
+
+# -- keystroke delay --------------------------------------------------------
+
+
+def _capture_argv(monkeypatch):
+    import murmur.inject as mi
+
+    seen = []
+    monkeypatch.setattr(mi, "_run", lambda argv, stdin=None: seen.append(argv))
+    return seen
+
+
+def test_wtype_passes_the_keystroke_delay(monkeypatch):
+    """wtype defaults to no gap between key events. Capitals are three events,
+    press shift, tap, release, and that sequence was losing whole characters:
+    "Mostly" arrived as "ostly"."""
+    seen = _capture_argv(monkeypatch)
+    inject("Mostly", "wtype", delay_ms=2)
+    assert seen == [["wtype", "-d", "2", "--", "Mostly "]]
+
+
+def test_wtype_omits_the_flag_when_delay_is_zero(monkeypatch):
+    seen = _capture_argv(monkeypatch)
+    inject("Mostly", "wtype", delay_ms=0)
+    assert seen == [["wtype", "--", "Mostly "]]
+
+
+def test_delay_default_is_nonzero_in_config(tmp_path):
+    assert Config.load(tmp_path / "nope.toml").inject_delay_ms > 0
+
+
+def test_delay_is_configurable(tmp_path):
+    p = tmp_path / "config.toml"
+    p.write_text("inject_delay_ms = 8\n")
+    assert Config.load(p).inject_delay_ms == 8

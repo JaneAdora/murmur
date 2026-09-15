@@ -182,7 +182,7 @@ class Daemon:
 
         if text and not self._dry:
             try:
-                inject(text, self.cfg.inject, self.cfg.trailing_space)
+                inject(text, self.cfg.inject, self.cfg.trailing_space, self.cfg.inject_delay_ms)
             except InjectionError as exc:
                 self._set(last_error=f"inject failed: {exc}")
                 log(f"inject failed: {exc} - text was: {text!r}")
